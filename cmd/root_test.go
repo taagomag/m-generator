@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestRootCommand(t *testing.T) {
@@ -39,5 +40,20 @@ func TestRootCommand(t *testing.T) {
 				t.Errorf("output = %q, want it to contain %q", output.String(), tt.want)
 			}
 		})
+	}
+}
+
+func TestGenerateTimeoutDefaultsToOneMinute(t *testing.T) {
+	root := NewRootCmd()
+	generate, _, err := root.Find([]string{"generate"})
+	if err != nil {
+		t.Fatalf("Find(generate) error = %v", err)
+	}
+	timeout, err := generate.Flags().GetDuration("timeout")
+	if err != nil {
+		t.Fatalf("GetDuration(timeout) error = %v", err)
+	}
+	if timeout != time.Minute {
+		t.Errorf("timeout = %s, want %s", timeout, time.Minute)
 	}
 }
