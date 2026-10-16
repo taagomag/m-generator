@@ -1,0 +1,21 @@
+output:
+  type: nats
+  nats:
+    url: nats://localhost:4222
+    stream: METRICS
+    subject_prefix: metrics
+
+generator:
+  rate: 1/s
+
+metrics:
+  - name: http_requests_total
+    type: counter
+    help: Total HTTP requests
+    labels:
+      - name: method
+        values: [GET, POST, PUT, DELETE]
+    value:
+      type: increment
+      min: 1
+      max: 10

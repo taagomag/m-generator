@@ -51,8 +51,33 @@ func TestValidateCommandRejectsInvalidConfig(t *testing.T) {
 	root := NewRootCmd()
 	root.SetArgs([]string{"validate", "--config", configFile})
 	err := root.ExecuteContext(t.Context())
-	if err == nil || !strings.Contains(err.Error(), "output.type must be json") {
+	if err == nil || !strings.Contains(err.Error(), "output.type must be json or nats") {
 		t.Errorf("ExecuteContext() error = %v, want unsupported output.type error", err)
+	}
+}
+
+func TestValidateCommandAcceptsNATSConfig(t *testing.T) {
+	configFile := filepath.Join(t.TempDir(), "nats.yaml")
+	configData := `output:
+  type: nats
+  nats:
+    url: nats://localhost:4222
+    stream: METRICS
+    subject_prefix: metrics
+metrics:
+  - name: requests_total
+    type: counter
+    help: Total requests
+    value:
+      type: increment
+`
+	if err := os.WriteFile(configFile, []byte(configData), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	root := NewRootCmd()
+	root.SetArgs([]string{"validate", "--config", configFile})
+	if err := root.ExecuteContext(t.Context()); err != nil {
+		t.Fatalf("ExecuteContext() error = %v", err)
 	}
 }
 

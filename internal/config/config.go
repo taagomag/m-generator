@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"math"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -18,10 +19,17 @@ type Config struct {
 type OutputConfig struct {
 	Type string     `mapstructure:"type"`
 	JSON JSONConfig `mapstructure:"json"`
+	NATS NATSConfig `mapstructure:"nats"`
 }
 
 type JSONConfig struct {
 	File string `mapstructure:"file"`
+}
+
+type NATSConfig struct {
+	URL           string `mapstructure:"url"`
+	Stream        string `mapstructure:"stream"`
+	SubjectPrefix string `mapstructure:"subject_prefix"`
 }
 
 type GeneratorConfig struct {
@@ -62,11 +70,27 @@ var (
 )
 
 func (c Config) Validate() error {
-	if c.Output.Type != "json" {
-		return fmt.Errorf("output.type must be json")
-	}
-	if strings.TrimSpace(c.Output.JSON.File) == "" {
-		return fmt.Errorf("output.json.file is required")
+	switch c.Output.Type {
+	case "json":
+		if strings.TrimSpace(c.Output.JSON.File) == "" {
+			return fmt.Errorf("output.json.file is required")
+		}
+	case "nats":
+		if strings.TrimSpace(c.Output.NATS.URL) == "" {
+			return fmt.Errorf("output.nats.url is required")
+		}
+		natsURL, err := url.Parse(c.Output.NATS.URL)
+		if err != nil || natsURL.Scheme != "nats" || natsURL.Host == "" {
+			return fmt.Errorf("output.nats.url must be a valid nats:// URL")
+		}
+		if strings.TrimSpace(c.Output.NATS.Stream) == "" {
+			return fmt.Errorf("output.nats.stream is required")
+		}
+		if !validSubjectPrefix(c.Output.NATS.SubjectPrefix) {
+			return fmt.Errorf("output.nats.subject_prefix must be a non-empty NATS subject prefix without wildcards")
+		}
+	default:
+		return fmt.Errorf("output.type must be json or nats")
 	}
 
 	if c.Generator.Rate != "" {
@@ -108,6 +132,18 @@ func (c Config) Validate() error {
 		}
 	}
 	return nil
+}
+
+func validSubjectPrefix(prefix string) bool {
+	if strings.TrimSpace(prefix) == "" || strings.ContainsAny(prefix, " *>") {
+		return false
+	}
+	for _, token := range strings.Split(prefix, ".") {
+		if token == "" {
+			return false
+		}
+	}
+	return true
 }
 
 func validateValue(metricIndex int, value ValueConfig) error {

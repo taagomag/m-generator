@@ -38,9 +38,9 @@ func TestConfigValidate(t *testing.T) {
 		{
 			name: "unsupported output type",
 			mutate: func(c *Config) {
-				c.Output.Type = "nats"
+				c.Output.Type = "unsupported"
 			},
-			wantErr: "output.type must be json",
+			wantErr: "output.type must be json or nats",
 		},
 		{
 			name: "missing JSON file path",
@@ -89,6 +89,59 @@ func TestConfigValidate(t *testing.T) {
 				}
 				return
 			}
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("Validate() error = %v, want substring %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestNATSOutputValidate(t *testing.T) {
+	cfg := validConfig()
+	cfg.Output = OutputConfig{
+		Type: "nats",
+		NATS: NATSConfig{
+			URL:           "nats://localhost:4222",
+			Stream:        "METRICS",
+			SubjectPrefix: "metrics",
+		},
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v", err)
+	}
+
+	tests := []struct {
+		name    string
+		mutate  func(*NATSConfig)
+		wantErr string
+	}{
+		{
+			name: "invalid URL",
+			mutate: func(c *NATSConfig) {
+				c.URL = "http://localhost:4222"
+			},
+			wantErr: "output.nats.url must be a valid nats:// URL",
+		},
+		{
+			name: "missing stream",
+			mutate: func(c *NATSConfig) {
+				c.Stream = ""
+			},
+			wantErr: "output.nats.stream is required",
+		},
+		{
+			name: "invalid subject prefix",
+			mutate: func(c *NATSConfig) {
+				c.SubjectPrefix = "metrics..data"
+			},
+			wantErr: "output.nats.subject_prefix",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			testConfig := cfg
+			tt.mutate(&testConfig.Output.NATS)
+			err := testConfig.Validate()
 			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
 				t.Errorf("Validate() error = %v, want substring %q", err, tt.wantErr)
 			}
