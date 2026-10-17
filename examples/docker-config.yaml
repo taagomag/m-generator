@@ -1,0 +1,33 @@
+output:
+  type: nats
+  nats:
+    url: nats://nats:4222
+    stream: METRICS
+    subject_prefix: metrics
+
+generator:
+  rate: 10/s
+
+metrics:
+  - name: http_requests_total
+    type: counter
+    help: Total HTTP requests
+    labels:
+      - name: method
+        values: [GET, POST, PUT, DELETE]
+        distribution: [0.6, 0.25, 0.1, 0.05]
+    value:
+      type: increment
+      min: 1
+      max: 10
+
+  - name: app_memory_bytes
+    type: gauge
+    help: Application memory usage
+    labels:
+      - name: instance
+        values: [pod-1, pod-2, pod-3]
+    value:
+      type: random
+      min: 100000000
+      max: 2000000000

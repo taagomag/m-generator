@@ -1,0 +1,17 @@
+services:
+  nats:
+    image: nats:2.10-alpine
+    command: ["-js", "-m", "8222"]
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+
+  metrics-generator:
+    build:
+      context: ..
+    command: ["generate", "--config", "/etc/metrics-generator/config.yaml", "--timeout", "24h"]
+    volumes:
+      - ./docker-config.yaml:/etc/metrics-generator/config.yaml:ro
+    depends_on:
+      - nats
+    restart: on-failure
