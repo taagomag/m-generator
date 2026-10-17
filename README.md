@@ -1,5 +1,7 @@
 # Metrics Generator CLI
 
+[![CI](https://github.com/taagomag/m-generator/actions/workflows/ci.yml/badge.svg)](https://github.com/taagomag/m-generator/actions/workflows/ci.yml)
+
 A Go CLI for generating synthetic metrics and writing them to a JSON file or
 publishing them to NATS JetStream.
 
@@ -36,3 +38,13 @@ Prometheus semantics:
 Histograms use `buckets` when set, otherwise the Prometheus default buckets.
 See [examples/config.yaml](examples/config.yaml) for every type.
 
+
+## Development
+
+CI runs both checks on every push to `main` and on pull requests. Run them
+locally with the same golangci-lint version:
+
+```sh
+make lint
+make test
+```
