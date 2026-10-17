@@ -12,9 +12,7 @@ import (
 func TestValidateCommand(t *testing.T) {
 	configFile := filepath.Join(t.TempDir(), "config.yaml")
 	configData := `output:
-  type: json
-  json:
-    file: metrics.json
+  type: stdout
 generator:
   rate: 100/s
 metrics:
@@ -51,7 +49,7 @@ func TestValidateCommandRejectsInvalidConfig(t *testing.T) {
 	root := NewRootCmd()
 	root.SetArgs([]string{"validate", "--config", configFile})
 	err := root.ExecuteContext(t.Context())
-	if err == nil || !strings.Contains(err.Error(), "output.type must be json or nats") {
+	if err == nil || !strings.Contains(err.Error(), "output.type must be stdout or nats") {
 		t.Errorf("ExecuteContext() error = %v, want unsupported output.type error", err)
 	}
 }
@@ -81,14 +79,10 @@ metrics:
 	}
 }
 
-func TestGenerateCommandWritesJSONDocumentAndReplacesFile(t *testing.T) {
-	dir := t.TempDir()
-	outputFile := filepath.Join(dir, "generated.json")
-	configFile := filepath.Join(dir, "config.yaml")
+func TestGenerateCommandWritesOneJSONLinePerBatchToStdout(t *testing.T) {
+	configFile := filepath.Join(t.TempDir(), "config.yaml")
 	configData := `output:
-  type: json
-  json:
-    file: ` + outputFile + `
+  type: stdout
 metrics:
   - name: requests_total
     type: counter
@@ -103,9 +97,6 @@ generator:
 	if err := os.WriteFile(configFile, []byte(configData), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(outputFile, []byte("old data"), 0o600); err != nil {
-		t.Fatal(err)
-	}
 
 	output := new(bytes.Buffer)
 	root := NewRootCmd()
@@ -116,36 +107,57 @@ generator:
 	if err := root.ExecuteContext(t.Context()); err != nil {
 		t.Fatalf("ExecuteContext() error = %v", err)
 	}
-	data, err := os.ReadFile(outputFile)
-	if err != nil {
-		t.Fatalf("ReadFile(%q): %v", outputFile, err)
+	lines := strings.Split(strings.TrimSpace(output.String()), "\n")
+	if len(lines) < 2 {
+		t.Fatalf("generated %d batches, want at least 2", len(lines))
 	}
-	var document struct {
-		Batches [][]struct {
+	previous := 0.0
+	for _, line := range lines {
+		var metrics []struct {
 			Name    string `json:"name"`
 			Samples []struct {
 				Value float64 `json:"value"`
 			} `json:"samples"`
-		} `json:"batches"`
-	}
-	if err := json.Unmarshal(data, &document); err != nil {
-		t.Fatalf("Unmarshal generated JSON: %v", err)
-	}
-	if len(document.Batches) < 2 {
-		t.Fatalf("generated %d batches, want at least 2", len(document.Batches))
-	}
-	previous := 0.0
-	for _, metrics := range document.Batches {
-		if len(metrics) != 1 || metrics[0].Name != "requests_total" {
-			t.Fatalf("generated metrics = %+v, want requests_total", metrics)
 		}
-		if len(metrics[0].Samples) != 1 {
-			t.Fatalf("generated samples = %+v, want exactly one", metrics[0].Samples)
+		if err := json.Unmarshal([]byte(line), &metrics); err != nil {
+			t.Fatalf("Unmarshal line %q: %v", line, err)
+		}
+		if len(metrics) != 1 || metrics[0].Name != "requests_total" || len(metrics[0].Samples) != 1 {
+			t.Fatalf("generated metrics = %+v, want one requests_total sample", metrics)
 		}
 		value := metrics[0].Samples[0].Value
 		if delta := value - previous; delta < 1 || delta > 5 {
 			t.Errorf("counter increased by %v, want increment in [1, 5]", delta)
 		}
 		previous = value
+	}
+}
+
+func TestGenerateDefaultsToStdoutAndRateFlagOverridesConfig(t *testing.T) {
+	configFile := filepath.Join(t.TempDir(), "config.yaml")
+	configData := `generator:
+  rate: 1/m
+metrics:
+  - name: requests_total
+    type: counter
+    help: Total requests
+    value:
+      type: increment
+`
+	if err := os.WriteFile(configFile, []byte(configData), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	output := new(bytes.Buffer)
+	root := NewRootCmd()
+	root.SetOut(output)
+	root.SetErr(output)
+	root.SetArgs([]string{"generate", "--config", configFile, "--timeout", "50ms", "--rate", "1000/s"})
+
+	if err := root.ExecuteContext(t.Context()); err != nil {
+		t.Fatalf("ExecuteContext() error = %v", err)
+	}
+	if lines := strings.Count(output.String(), "\n"); lines < 2 {
+		t.Errorf("generated %d batches on stdout, want at least 2 (--rate should override 1/m)", lines)
 	}
 }

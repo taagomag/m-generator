@@ -37,6 +37,7 @@ func loadConfig(v *viper.Viper, cmd *cobra.Command) (config.Config, error) {
 	if err := v.Unmarshal(&cfg); err != nil {
 		return config.Config{}, fmt.Errorf("decode config file: %w", err)
 	}
+	cfg.ApplyDefaults()
 	if err := cfg.Validate(); err != nil {
 		return config.Config{}, fmt.Errorf("validate config file: %w", err)
 	}

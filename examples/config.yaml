@@ -1,7 +1,5 @@
 output:
-  type: json
-  json:
-    file: metrics.json
+  type: stdout
 
 generator:
   rate: 1/s

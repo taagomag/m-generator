@@ -9,10 +9,7 @@ import (
 func validConfig() Config {
 	return Config{
 		Output: OutputConfig{
-			Type: "json",
-			JSON: JSONConfig{
-				File: "metrics.json",
-			},
+			Type: "stdout",
 		},
 		Generator: GeneratorConfig{
 			Rate: "100/s",
@@ -40,14 +37,7 @@ func TestConfigValidate(t *testing.T) {
 			mutate: func(c *Config) {
 				c.Output.Type = "unsupported"
 			},
-			wantErr: "output.type must be json or nats",
-		},
-		{
-			name: "missing JSON file path",
-			mutate: func(c *Config) {
-				c.Output.JSON.File = ""
-			},
-			wantErr: "output.json.file is required",
+			wantErr: "output.type must be stdout or nats",
 		},
 		{
 			name: "invalid rate",
@@ -192,5 +182,18 @@ func TestRateInterval(t *testing.T) {
 				t.Errorf("RateInterval() = %s, want %s", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestApplyDefaults(t *testing.T) {
+	cfg := validConfig()
+	cfg.Output.Type = ""
+	cfg.Generator.Rate = ""
+	cfg.ApplyDefaults()
+	if cfg.Output.Type != DefaultOutputType || cfg.Generator.Rate != DefaultRate {
+		t.Errorf("ApplyDefaults() = output %q, rate %q; want %q, %q", cfg.Output.Type, cfg.Generator.Rate, DefaultOutputType, DefaultRate)
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Errorf("Validate() after ApplyDefaults() error = %v", err)
 	}
 }

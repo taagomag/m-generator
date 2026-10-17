@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand/v2"
-	"os"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -21,6 +20,9 @@ func NewGenerateCmd(v *viper.Viper) *cobra.Command {
 		Short: "Generate metrics continuously and send them to the configured output",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := v.BindPFlag("generator.rate", cmd.Flags().Lookup("rate")); err != nil {
+				return fmt.Errorf("bind rate flag: %w", err)
+			}
 			cfg, err := loadConfig(v, cmd)
 			if err != nil {
 				return err
@@ -33,8 +35,8 @@ func NewGenerateCmd(v *viper.Viper) *cobra.Command {
 				return fmt.Errorf("timeout must be greater than zero")
 			}
 			switch cfg.Output.Type {
-			case "json":
-				return generateJSON(cmd, cfg, timeout)
+			case "stdout":
+				return generateStdout(cmd, cfg, timeout)
 			case "nats":
 				return generateNATS(cmd, cfg, timeout)
 			default:
@@ -43,31 +45,17 @@ func NewGenerateCmd(v *viper.Viper) *cobra.Command {
 		},
 	}
 	cmd.Flags().Duration("timeout", time.Minute, "Stop generation after this duration")
+	cmd.Flags().String("rate", config.DefaultRate, "Batches per second or minute, e.g. 100/s; overrides generator.rate")
 	return cmd
 }
 
-func generateJSON(cmd *cobra.Command, cfg config.Config, timeout time.Duration) error {
-	batches := make([][]generator.Metric, 0)
-	err := runGeneration(cmd.Context(), cfg, timeout, func(metrics []generator.Metric) error {
-		batches = append(batches, metrics)
-		return nil
+// generateStdout writes each batch as one JSON line (NDJSON), using the same
+// payload as a NATS message.
+func generateStdout(cmd *cobra.Command, cfg config.Config, timeout time.Duration) error {
+	encoder := json.NewEncoder(cmd.OutOrStdout())
+	return runGeneration(cmd.Context(), cfg, timeout, func(metrics []generator.Metric) error {
+		return encoder.Encode(metrics)
 	})
-	if err != nil {
-		return err
-	}
-	document := struct {
-		Batches [][]generator.Metric `json:"batches"`
-	}{Batches: batches}
-	data, err := json.MarshalIndent(document, "", "  ")
-	if err != nil {
-		return fmt.Errorf("encode metrics as JSON: %w", err)
-	}
-	data = append(data, '\n')
-	if err := os.WriteFile(cfg.Output.JSON.File, data, 0o644); err != nil {
-		return fmt.Errorf("write JSON output %q: %w", cfg.Output.JSON.File, err)
-	}
-	_, err = fmt.Fprintf(cmd.OutOrStdout(), "Wrote metrics to %s\n", cfg.Output.JSON.File)
-	return err
 }
 
 func generateNATS(cmd *cobra.Command, cfg config.Config, timeout time.Duration) error {
@@ -94,11 +82,7 @@ func runGeneration(ctx context.Context, cfg config.Config, timeout time.Duration
 	}
 	timer := time.NewTimer(timeout)
 	defer timer.Stop()
-	rate := cfg.Generator.Rate
-	if rate == "" {
-		rate = "1/s"
-	}
-	interval, err := config.RateInterval(rate)
+	interval, err := config.RateInterval(cfg.Generator.Rate)
 	if err != nil {
 		return err
 	}

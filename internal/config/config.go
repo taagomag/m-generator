@@ -18,12 +18,7 @@ type Config struct {
 
 type OutputConfig struct {
 	Type string     `mapstructure:"type"`
-	JSON JSONConfig `mapstructure:"json"`
 	NATS NATSConfig `mapstructure:"nats"`
-}
-
-type JSONConfig struct {
-	File string `mapstructure:"file"`
 }
 
 type NATSConfig struct {
@@ -57,17 +52,29 @@ type ValueConfig struct {
 	Max  float64 `mapstructure:"max"`
 }
 
+const (
+	DefaultOutputType = "stdout"
+	DefaultRate       = "1/s"
+)
+
 var (
 	metricNamePattern = regexp.MustCompile(`^[a-zA-Z_:][a-zA-Z0-9_:]*$`)
 	labelNamePattern  = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
 )
 
+// ApplyDefaults fills in optional settings that were not configured.
+func (c *Config) ApplyDefaults() {
+	if c.Output.Type == "" {
+		c.Output.Type = DefaultOutputType
+	}
+	if c.Generator.Rate == "" {
+		c.Generator.Rate = DefaultRate
+	}
+}
+
 func (c Config) Validate() error {
 	switch c.Output.Type {
-	case "json":
-		if strings.TrimSpace(c.Output.JSON.File) == "" {
-			return fmt.Errorf("output.json.file is required")
-		}
+	case "stdout":
 	case "nats":
 		if strings.TrimSpace(c.Output.NATS.URL) == "" {
 			return fmt.Errorf("output.nats.url is required")
@@ -83,13 +90,11 @@ func (c Config) Validate() error {
 			return fmt.Errorf("output.nats.subject_prefix must be a non-empty NATS subject prefix without wildcards")
 		}
 	default:
-		return fmt.Errorf("output.type must be json or nats")
+		return fmt.Errorf("output.type must be stdout or nats")
 	}
 
-	if c.Generator.Rate != "" {
-		if err := ValidateRate(c.Generator.Rate); err != nil {
-			return err
-		}
+	if err := ValidateRate(c.Generator.Rate); err != nil {
+		return err
 	}
 	if len(c.Metrics) == 0 {
 		return fmt.Errorf("metrics must contain at least one metric")

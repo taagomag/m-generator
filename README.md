@@ -2,8 +2,8 @@
 
 [![CI](https://github.com/taagomag/m-generator/actions/workflows/ci.yml/badge.svg)](https://github.com/taagomag/m-generator/actions/workflows/ci.yml)
 
-A Go CLI for generating synthetic metrics and writing them to a JSON file or
-publishing them to NATS JetStream.
+A Go CLI for generating synthetic metrics and writing them to stdout or
+publishing them to NATS JetStream, for example to load test a consumer.
 
 ## CLI
 
@@ -18,10 +18,25 @@ go run ./cmd/metrics-generator validate --config examples/config.yaml
 The CLI provides Cobra's built-in `--version` flag and validates YAML
 configuration files. `generate` runs for one minute by default; override the
 run time with `--timeout` (for example, `--timeout 30s`). The default rate is
-one batch per second; configure `generator.rate` using a count per second or
-minute, such as `10/s`. Each batch contains one sample for every configured
-metric. JSON output collects batches and writes one document at the end, while
-NATS output publishes each batch as it is generated.
+one batch per second; set it with `generator.rate` or the `--rate` flag, which
+takes precedence, using a count per second or minute such as `10/s`. Each
+batch contains one sample for every configured metric and is sent to the
+output as soon as it is generated.
+
+### Outputs
+
+Set `output.type` to one of:
+
+- `stdout` (default): writes each batch as one JSON line, so it can be piped
+  to `jq` or redirected to a file.
+- `nats`: publishes each batch as JSON to `<subject_prefix>.batch` and waits
+  for the JetStream acknowledgment. The stream is created if it does not
+  exist; existing streams must capture `<subject_prefix>.>`. See
+  [examples/nats-config.yaml](examples/nats-config.yaml).
+
+```sh
+go run ./cmd/metrics-generator generate -c examples/config.yaml --timeout 5s | jq .
+```
 
 ### Metric types
 
