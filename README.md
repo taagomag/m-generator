@@ -63,3 +63,7 @@ locally with the same golangci-lint version:
 make lint
 make test
 ```
+
+## License
+
+[MIT](LICENSE)
