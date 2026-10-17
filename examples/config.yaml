@@ -18,3 +18,26 @@ metrics:
       type: increment
       min: 1
       max: 10
+
+  - name: http_request_duration_seconds
+    type: histogram
+    help: HTTP request latency
+    buckets: [0.05, 0.1, 0.25, 0.5, 1, 2.5]
+    labels:
+      - name: method
+        values: [GET, POST]
+    value:
+      type: random
+      min: 0.01
+      max: 3
+
+  - name: app_memory_bytes
+    type: gauge
+    help: Application memory usage
+    labels:
+      - name: instance
+        values: [pod-1, pod-2, pod-3]
+    value:
+      type: random
+      min: 100000000
+      max: 2000000000

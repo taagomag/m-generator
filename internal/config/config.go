@@ -37,11 +37,12 @@ type GeneratorConfig struct {
 }
 
 type MetricConfig struct {
-	Name   string        `mapstructure:"name"`
-	Type   string        `mapstructure:"type"`
-	Help   string        `mapstructure:"help"`
-	Labels []LabelConfig `mapstructure:"labels"`
-	Value  ValueConfig   `mapstructure:"value"`
+	Name    string        `mapstructure:"name"`
+	Type    string        `mapstructure:"type"`
+	Help    string        `mapstructure:"help"`
+	Labels  []LabelConfig `mapstructure:"labels"`
+	Value   ValueConfig   `mapstructure:"value"`
+	Buckets []float64     `mapstructure:"buckets"`
 }
 
 type LabelConfig struct {
@@ -51,17 +52,9 @@ type LabelConfig struct {
 }
 
 type ValueConfig struct {
-	Type         string  `mapstructure:"type"`
-	Distribution string  `mapstructure:"distribution"`
-	Min          float64 `mapstructure:"min"`
-	Max          float64 `mapstructure:"max"`
-	Mean         float64 `mapstructure:"mean"`
-	Initial      float64 `mapstructure:"initial"`
-	StepMin      float64 `mapstructure:"step_min"`
-	StepMax      float64 `mapstructure:"step_max"`
-	Period       string  `mapstructure:"period"`
-	Amplitude    float64 `mapstructure:"amplitude"`
-	Offset       float64 `mapstructure:"offset"`
+	Type string  `mapstructure:"type"`
+	Min  float64 `mapstructure:"min"`
+	Max  float64 `mapstructure:"max"`
 }
 
 var (
@@ -123,12 +116,41 @@ func (c Config) Validate() error {
 			return err
 		}
 		switch metric.Value.Type {
-		case "increment", "random", "walk", "sine":
+		case "increment", "random":
 		default:
-			return fmt.Errorf("metrics[%d].value.type must be increment, random, walk, or sine", i)
+			return fmt.Errorf("metrics[%d].value.type must be increment or random", i)
+		}
+		if (metric.Type == "counter") != (metric.Value.Type == "increment") {
+			return fmt.Errorf("metrics[%d]: counters must use value.type increment, and increment is only valid for counters", i)
 		}
 		if err := validateValue(i, metric.Value); err != nil {
 			return err
+		}
+		if err := validateBuckets(i, metric); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateBuckets(metricIndex int, metric MetricConfig) error {
+	if metric.Type != "histogram" {
+		if len(metric.Buckets) > 0 {
+			return fmt.Errorf("metrics[%d].buckets is only valid for histograms", metricIndex)
+		}
+		return nil
+	}
+	for _, label := range metric.Labels {
+		if label.Name == "le" {
+			return fmt.Errorf("metrics[%d]: label name \"le\" is reserved for histograms", metricIndex)
+		}
+	}
+	for j, bound := range metric.Buckets {
+		if math.IsNaN(bound) || math.IsInf(bound, 0) {
+			return fmt.Errorf("metrics[%d].buckets must be finite", metricIndex)
+		}
+		if j > 0 && bound <= metric.Buckets[j-1] {
+			return fmt.Errorf("metrics[%d].buckets must be strictly increasing", metricIndex)
 		}
 	}
 	return nil
@@ -147,47 +169,16 @@ func validSubjectPrefix(prefix string) bool {
 }
 
 func validateValue(metricIndex int, value ValueConfig) error {
-	switch value.Type {
-	case "increment":
-		if value.Min < 0 {
-			return fmt.Errorf("metrics[%d].value.min must not be negative for increment values", metricIndex)
-		}
-		if value.Max < value.Min {
-			return fmt.Errorf("metrics[%d].value.max must be greater than or equal to min", metricIndex)
-		}
-	case "random":
-		switch value.Distribution {
-		case "", "uniform":
-			if value.Max < value.Min {
-				return fmt.Errorf("metrics[%d].value.max must be greater than or equal to min", metricIndex)
-			}
-		case "exponential":
-			if value.Mean <= 0 {
-				return fmt.Errorf("metrics[%d].value.mean must be greater than zero for exponential distribution", metricIndex)
-			}
-			if value.Max < 0 {
-				return fmt.Errorf("metrics[%d].value.max must not be negative", metricIndex)
-			}
-		default:
-			return fmt.Errorf("metrics[%d].value.distribution must be uniform or exponential", metricIndex)
-		}
-	case "walk":
-		if value.StepMax < value.StepMin {
-			return fmt.Errorf("metrics[%d].value.step_max must be greater than or equal to step_min", metricIndex)
-		}
-		if value.Min > value.Max && value.Max != 0 {
-			return fmt.Errorf("metrics[%d].value.max must be greater than or equal to min", metricIndex)
-		}
-	case "sine":
-		period, err := time.ParseDuration(value.Period)
-		if err != nil || period <= 0 {
-			return fmt.Errorf("metrics[%d].value.period must be a positive duration", metricIndex)
-		}
-	}
-	for _, number := range []float64{value.Min, value.Max, value.Mean, value.Initial, value.StepMin, value.StepMax, value.Amplitude, value.Offset} {
+	for _, number := range []float64{value.Min, value.Max} {
 		if math.IsNaN(number) || math.IsInf(number, 0) {
 			return fmt.Errorf("metrics[%d].value numbers must be finite", metricIndex)
 		}
+	}
+	if value.Type == "increment" && value.Min < 0 {
+		return fmt.Errorf("metrics[%d].value.min must not be negative for increment values", metricIndex)
+	}
+	if value.Max < value.Min {
+		return fmt.Errorf("metrics[%d].value.max must be greater than or equal to min", metricIndex)
 	}
 	return nil
 }

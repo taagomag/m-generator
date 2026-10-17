@@ -134,6 +134,7 @@ generator:
 	if len(document.Batches) < 2 {
 		t.Fatalf("generated %d batches, want at least 2", len(document.Batches))
 	}
+	previous := 0.0
 	for _, metrics := range document.Batches {
 		if len(metrics) != 1 || metrics[0].Name != "requests_total" {
 			t.Fatalf("generated metrics = %+v, want requests_total", metrics)
@@ -141,8 +142,10 @@ generator:
 		if len(metrics[0].Samples) != 1 {
 			t.Fatalf("generated samples = %+v, want exactly one", metrics[0].Samples)
 		}
-		if value := metrics[0].Samples[0].Value; value < 1 || value > 5 {
-			t.Errorf("generated value = %v, want value in [1, 5]", value)
+		value := metrics[0].Samples[0].Value
+		if delta := value - previous; delta < 1 || delta > 5 {
+			t.Errorf("counter increased by %v, want increment in [1, 5]", delta)
 		}
+		previous = value
 	}
 }

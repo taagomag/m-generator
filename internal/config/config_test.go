@@ -74,6 +74,31 @@ func TestConfigValidate(t *testing.T) {
 			},
 			wantErr: "distribution weights must sum to 1",
 		},
+		{
+			name: "counter without increment",
+			mutate: func(c *Config) {
+				c.Metrics[0].Value = ValueConfig{Type: "random"}
+			},
+			wantErr: "counters must use value.type increment",
+		},
+		{
+			name: "unsorted histogram buckets",
+			mutate: func(c *Config) {
+				c.Metrics[0].Type = "histogram"
+				c.Metrics[0].Value = ValueConfig{Type: "random", Max: 1}
+				c.Metrics[0].Buckets = []float64{0.5, 0.1}
+			},
+			wantErr: "buckets must be strictly increasing",
+		},
+		{
+			name: "reserved le label on histogram",
+			mutate: func(c *Config) {
+				c.Metrics[0].Type = "histogram"
+				c.Metrics[0].Value = ValueConfig{Type: "random", Max: 1}
+				c.Metrics[0].Labels = []LabelConfig{{Name: "le", Values: []string{"x"}}}
+			},
+			wantErr: `label name "le" is reserved`,
+		},
 	}
 
 	for _, tt := range tests {

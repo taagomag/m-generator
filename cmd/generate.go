@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/rand/v2"
 	"os"
 	"time"
 
@@ -101,8 +102,9 @@ func runGeneration(ctx context.Context, cfg config.Config, timeout time.Duration
 	if err != nil {
 		return err
 	}
+	gen := generator.New(cfg.Metrics, rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64())))
 	generateBatch := func() error {
-		metrics, err := generator.Generate(cfg, time.Now())
+		metrics, err := gen.Next(time.Now())
 		if err != nil {
 			return fmt.Errorf("generate metrics: %w", err)
 		}
