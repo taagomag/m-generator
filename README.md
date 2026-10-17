@@ -43,6 +43,12 @@ Set `output.type` to one of:
   exist; existing streams must capture `<subject_prefix>.>`. See
   [examples/nats-config.yaml](examples/nats-config.yaml).
 
+  Each publish is retried up to 3 times with exponential backoff (starting at
+  100ms) on error. All attempts for a batch reuse one JetStream message ID, so
+  the server drops duplicates within the stream's duplicate window. Failed
+  attempts are logged to stderr with `publish attempt failed`. If every
+  attempt fails, the run stops with an error.
+
 ```sh
 go run ./cmd/metrics-generator generate -c examples/config.yaml --timeout 5s | jq .
 ```
@@ -63,6 +69,20 @@ Histograms use `buckets` when set, otherwise the Prometheus default buckets.
 See [examples/config.yaml](examples/config.yaml) for every type.
 
 
+### Docker
+
+The [Dockerfile](Dockerfile) builds a static binary and packages it in a
+distroless, non-root image. To run a demo with a local NATS JetStream server
+and the generator publishing to it:
+
+```sh
+docker compose -f examples/docker-compose.yaml up --build
+```
+
+The NATS monitoring endpoint is at `http://localhost:8222`. The compose
+config is in [examples/docker-config.yaml](examples/docker-config.yaml).
+Stop the demo with `docker compose -f examples/docker-compose.yaml down`.
+
 ## Development
 
 CI runs both checks on every push to `main` and on pull requests. Run them
@@ -72,6 +92,11 @@ locally with the same golangci-lint version:
 make lint
 make test
 ```
+
+Run `make help` to list all targets. `make build` writes the binary to
+`bin/metrics-generator`. `make test` runs tests with the race detector, and
+`make fmt` and `make vet` run the matching Go tools. The NATS publisher tests
+start an embedded JetStream server, so they need no external services.
 
 ### Releasing
 
