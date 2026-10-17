@@ -21,7 +21,7 @@ func TestRootCommand(t *testing.T) {
 		{
 			name: "version",
 			args: []string{"--version"},
-			want: "metrics-generator version 0.0.1",
+			want: "metrics-generator version dev",
 		},
 	}
 

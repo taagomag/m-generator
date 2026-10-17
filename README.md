@@ -5,6 +5,15 @@
 A Go CLI for generating synthetic metrics and writing them to stdout or
 publishing them to NATS JetStream, for example to load test a consumer.
 
+## Install
+
+Download a binary for Linux, macOS, or Windows from
+[Releases](https://github.com/taagomag/m-generator/releases), or install with Go:
+
+```sh
+go install github.com/taagomag/m-generator/cmd/metrics-generator@latest
+```
+
 ## CLI
 
 Run the CLI from the repository root:
@@ -62,6 +71,16 @@ locally with the same golangci-lint version:
 ```sh
 make lint
 make test
+```
+
+### Releasing
+
+Pushing a `v*` tag runs the tests and publishes a GitHub release with binaries
+built by [GoReleaser](https://goreleaser.com):
+
+```sh
+git tag v0.1.0
+git push origin v0.1.0
 ```
 
 ## License
