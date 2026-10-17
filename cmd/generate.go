@@ -49,8 +49,6 @@ func NewGenerateCmd(v *viper.Viper) *cobra.Command {
 	return cmd
 }
 
-// generateStdout writes each batch as one JSON line (NDJSON), using the same
-// payload as a NATS message.
 func generateStdout(cmd *cobra.Command, cfg config.Config, timeout time.Duration) error {
 	encoder := json.NewEncoder(cmd.OutOrStdout())
 	return runGeneration(cmd.Context(), cfg, timeout, func(metrics []generator.Metric) error {

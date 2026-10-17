@@ -26,13 +26,13 @@ type Sample struct {
 	Timestamp int64             `json:"timestamp"`
 }
 
-// Generator produces batches of metrics and keeps per-series state so that
+// Generator produces batches of metrics and keeps per series state so that
 // counters and histograms accumulate across batches.
 type Generator struct {
-	metrics []config.MetricConfig
-	buckets [][]float64
-	rng     *rand.Rand
-	series  map[string]*series
+	metrics    []config.MetricConfig
+	buckets    [][]float64
+	randomizer *rand.Rand
+	series     map[string]*series
 }
 
 type series struct {
@@ -42,7 +42,7 @@ type series struct {
 	sum     float64
 }
 
-func New(metrics []config.MetricConfig, rng *rand.Rand) *Generator {
+func New(metrics []config.MetricConfig, randomizer *rand.Rand) *Generator {
 	buckets := make([][]float64, len(metrics))
 	for i, metric := range metrics {
 		if metric.Type == "histogram" {
@@ -53,10 +53,10 @@ func New(metrics []config.MetricConfig, rng *rand.Rand) *Generator {
 		}
 	}
 	return &Generator{
-		metrics: metrics,
-		buckets: buckets,
-		rng:     rng,
-		series:  make(map[string]*series),
+		metrics:    metrics,
+		buckets:    buckets,
+		randomizer: randomizer,
+		series:     make(map[string]*series),
 	}
 }
 
@@ -115,9 +115,9 @@ func (g *Generator) chooseLabels(metric config.MetricConfig) (map[string]string,
 
 func (g *Generator) chooseLabelValue(label config.LabelConfig) string {
 	if len(label.Distribution) == 0 {
-		return label.Values[g.rng.IntN(len(label.Values))]
+		return label.Values[g.randomizer.IntN(len(label.Values))]
 	}
-	target := g.rng.Float64()
+	target := g.randomizer.Float64()
 	total := 0.0
 	for i, weight := range label.Distribution {
 		total += weight
@@ -139,7 +139,7 @@ func (g *Generator) random(value config.ValueConfig) float64 {
 	if value.Max <= value.Min {
 		return value.Min
 	}
-	return value.Min + g.rng.Float64()*(value.Max-value.Min)
+	return value.Min + g.randomizer.Float64()*(value.Max-value.Min)
 }
 
 func (s *series) observe(value float64, bounds []float64) {
